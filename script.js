@@ -327,7 +327,7 @@ async function fetchLegFromGoogle(legDiv){
 
   btn.disabled = true;
   statusEl.style.color = 'var(--ink-soft)';
-  statusEl.textContent = '조회 중... (경로 후보 여러 개 확인 중)';
+  statusEl.textContent = '조회 중... (경로 확인 중)';
   optionsEl.innerHTML = '';
 
   const debugBox = legDiv.querySelector('.debug-box');
@@ -351,13 +351,13 @@ async function fetchLegFromGoogle(legDiv){
     : { address: withCity(toVal) };
 
   try{
+    // computeAlternativeRoutes: false 적용 및 regionCode 제거
     const requestBody1 = {
       origin: originBody,
       destination: destinationBody,
       travelMode: 'TRANSIT',
-      computeAlternativeRoutes: true,
+      computeAlternativeRoutes: false,
       languageCode: 'en',
-      regionCode: 'JP',
       departureTime: getDefaultDepartureTime()
     };
     const resp = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
@@ -371,36 +371,6 @@ async function fetchLegFromGoogle(legDiv){
     });
     let data = await resp.json();
     showDebug('1차 요청 (status ' + resp.status + ')', { request: requestBody1, response: data });
-
-    // Some TRANSIT requests return zero routes only when alternatives are requested.
-    // Retry once without alternatives before giving up.
-    if(resp.ok && (!data.routes || !data.routes.length)){
-      const requestBody2 = {
-        origin: originBody,
-        destination: destinationBody,
-        travelMode: 'TRANSIT',
-        computeAlternativeRoutes: false,
-        languageCode: 'en',
-        regionCode: 'JP',
-        departureTime: getDefaultDepartureTime()
-      };
-      const retryResp = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': apiKey,
-          'X-Goog-FieldMask': 'routes.legs.steps.transitDetails,routes.legs.steps.travelMode,routes.travelAdvisory.transitFare,fallbackInfo'
-        },
-        body: JSON.stringify(requestBody2)
-      });
-      const retryData = await retryResp.json();
-      showDebug('2차(재시도) 요청 (status ' + retryResp.status + ')', { request: requestBody2, response: retryData });
-      if(retryResp.ok && retryData.routes && retryData.routes.length){
-        data = retryData;
-      } else if(retryData.fallbackInfo){
-        data.fallbackInfo = retryData.fallbackInfo;
-      }
-    }
 
     if(!resp.ok){
       statusEl.style.color = 'var(--bad)';
